@@ -1,24 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Order, Courier, StoreInfo, IFoodConfig, WSEvent, OrderStatus, IFoodWebhookPayload, User } from "./types";
+import { Order, Courier, StoreInfo, IFoodConfig, WSEvent, OrderStatus, IFoodWebhookPayload, User, UserRole } from "./types";
 import { Navbar } from "./components/Navbar";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { CourierApp } from "./components/CourierApp";
-import { IFoodSimulator } from "./components/IFoodSimulator";
-import { ArchitectureDoc } from "./components/ArchitectureDoc";
-import { LoginModal } from "./components/LoginModal";
+import { LoginPage } from "./pages/LoginPage";
+import { AdminPage } from "./pages/AdminPage";
+import { CourierPage } from "./pages/CourierPage";
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<"admin" | "courier" | "simulator" | "architecture">("admin");
+  const [currentPage, setCurrentPage] = useState<"login" | "admin" | "courier">("login");
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   
-  // Active User / Access Level State
-  const [currentUser, setCurrentUser] = useState<User | null>({
-    id: "admin-1",
-    name: "Gestor de Logística iFood",
-    email: "admin@ifood.com.br",
-    role: "admin",
-  });
+  // Active User State (null when not logged in)
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Auto redirect to login if not authenticated
+  useEffect(() => {
+    if (!currentUser && currentPage !== "login") {
+      setCurrentPage("login");
+    }
+  }, [currentUser, currentPage]);
+
   
   // App State synced via WebSockets
   const [orders, setOrders] = useState<Order[]>([]);
@@ -47,7 +47,13 @@ export default function App() {
 
   // Connect WebSocket & fetch initial state
   useEffect(() => {
-    fetch("/api/state")
+    const token = localStorage.getItem("ifood_token");
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    fetch("/api/state", { headers })
       .then((res) => res.json())
       .then((data) => {
         if (data.orders) setOrders(data.orders);
@@ -58,7 +64,8 @@ export default function App() {
       .catch((err) => console.error("Error fetching state:", err));
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
+    const wsUrl = `${protocol}//${window.location.host}${tokenQuery}`;
 
     let socket: WebSocket;
 
@@ -68,6 +75,9 @@ export default function App() {
 
       socket.onopen = () => {
         setIsConnected(true);
+        if (token) {
+          socket.send(JSON.stringify({ type: "AUTH_HANDSHAKE", data: { token } }));
+        }
       };
 
       socket.onclose = () => {
@@ -200,15 +210,29 @@ export default function App() {
     sendWSEvent({ type: "DELETE_COURIER", data: { courierId } });
   };
 
-  // User Role Switch Handler
-  const handleSelectUserRole = (user: User) => {
+  // Login Handler
+  const handleLogin = (user: User) => {
     setCurrentUser(user);
     if (user.role === "admin") {
-      setCurrentView("admin");
+      setCurrentPage("admin");
     } else {
-      setCurrentView("courier");
+      setCurrentPage("courier");
     }
-    setIsLoginModalOpen(false);
+  };
+
+  // Logout Handler
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentPage("login");
+  };
+
+  // Protected Navigation View Change Handler
+  const handleViewChange = (view: "login" | "admin" | "courier") => {
+    if (!currentUser && view !== "login") {
+      setCurrentPage("login");
+    } else {
+      setCurrentPage(view);
+    }
   };
 
   // Handlers
@@ -329,33 +353,41 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
-      {/* Login Modal Access Control */}
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        currentUser={currentUser}
-        couriers={couriers}
-        onSelectRole={handleSelectUserRole}
-        onClose={() => setIsLoginModalOpen(false)}
-      />
-
-      {/* Navbar Header */}
+      {/* Top Main Navigation Bar */}
       <Navbar
-        currentView={currentView}
-        onViewChange={setCurrentView}
+        currentView={currentPage}
+        onViewChange={handleViewChange}
         isConnected={isConnected}
         pendingOrdersCount={pendingCount}
         onlineCouriersCount={onlineCount}
         currentUser={currentUser}
-        onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onLogout={handleLogout}
       />
 
-      {/* Main Body Content based on active view tab */}
+      {/* Main Pages Router with Auth Guard */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {currentView === "admin" && (
-          <AdminDashboard
+        {currentPage === "login" && (
+          <LoginPage
+            currentUser={currentUser}
+            couriers={couriers}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            isConnected={isConnected}
+            pendingOrdersCount={pendingCount}
+            onlineCouriersCount={onlineCount}
+            onNavigateToRolePage={(role: UserRole) => setCurrentPage(role === "admin" ? "admin" : "courier")}
+          />
+        )}
+
+        {currentPage === "admin" && currentUser && (
+          <AdminPage
             orders={orders}
             couriers={couriers}
             storeInfo={storeInfo}
+            ifoodConfig={ifoodConfig}
+            lastWebhookReceived={lastWebhookReceived}
+            currentUser={currentUser}
+            isConnected={isConnected}
             onAssignOrder={handleAssignOrder}
             onUpdateStatus={handleUpdateOrderStatus}
             onCreateManualOrder={handleCreateManualOrder}
@@ -363,40 +395,32 @@ export default function App() {
             onCreateCourier={handleCreateCourier}
             onUpdateCourier={handleUpdateCourier}
             onDeleteCourier={handleDeleteCourier}
+            onSimulateOrder={handleSimulateOrder}
+            onNavigateToLogin={handleLogout}
           />
         )}
 
-        {currentView === "courier" && (
-          <CourierApp
+        {currentPage === "courier" && currentUser && (
+          <CourierPage
             couriers={couriers}
             orders={orders}
+            currentUser={currentUser}
             onUpdateLocation={handleUpdateLocation}
             onToggleOnline={handleToggleCourierOnline}
             onUpdateOrderStatus={handleUpdateOrderStatus}
-            activeCourierUser={couriers.find((c) => c.id === currentUser?.courierId)}
+            onNavigateToLogin={handleLogout}
           />
         )}
-
-        {currentView === "simulator" && (
-          <IFoodSimulator
-            ifoodConfig={ifoodConfig}
-            onSimulateOrder={handleSimulateOrder}
-            lastWebhookReceived={lastWebhookReceived}
-          />
-        )}
-
-        {currentView === "architecture" && <ArchitectureDoc />}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-slate-900 py-4 text-center text-xs text-slate-500 bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>iFood Entregadores & Logística Express v2.0 • PWA & Express WebSockets</span>
-          <span>Design Oficial iFood • Padrão de Acesso Administrador & Entregador</span>
+          <span>Sessão Protegida • Redirecionamento Automático para Login</span>
         </div>
       </footer>
 
     </div>
   );
 }
-

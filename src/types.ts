@@ -109,16 +109,26 @@ export interface IFoodWebhookPayload {
   orderData?: Partial<Order>;
 }
 
+export interface AuthResponse {
+  success: boolean;
+  token: string;
+  user: User;
+  message?: string;
+}
+
 // WebSocket Event Payloads
 export type WSEvent =
+  | { type: 'AUTH_HANDSHAKE'; data: { token: string } }
+  | { type: 'AUTH_ERROR'; data: { message: string } }
   | { type: 'INIT_STATE'; data: { orders: Order[]; couriers: Courier[]; storeInfo: StoreInfo; ifoodConfig: IFoodConfig } }
-  | { type: 'LOCATION_UPDATE'; data: { courierId: string; lat: number; lng: number; batteryLevel?: number } }
-  | { type: 'COURIER_STATUS_TOGGLE'; data: { courierId: string; isOnline: boolean } }
-  | { type: 'ASSIGN_ORDER'; data: { orderId: string; courierId: string } }
-  | { type: 'UPDATE_ORDER_STATUS'; data: { orderId: string; status: OrderStatus } }
+  | { type: 'LOCATION_UPDATE'; data: { courierId: string; lat: number; lng: number; batteryLevel?: number }; token?: string }
+  | { type: 'COURIER_STATUS_TOGGLE'; data: { courierId: string; isOnline: boolean }; token?: string }
+  | { type: 'ASSIGN_ORDER'; data: { orderId: string; courierId: string }; token?: string }
+  | { type: 'UPDATE_ORDER_STATUS'; data: { orderId: string; status: OrderStatus }; token?: string }
   | { type: 'NEW_ORDER'; data: Order }
   | { type: 'IFOOD_WEBHOOK_RECEIVED'; data: IFoodWebhookPayload }
-  | { type: 'CREATE_COURIER'; data: Courier }
-  | { type: 'UPDATE_COURIER'; data: Courier }
-  | { type: 'DELETE_COURIER'; data: { courierId: string } };
+  | { type: 'CREATE_COURIER'; data: Courier; token?: string }
+  | { type: 'UPDATE_COURIER'; data: Courier; token?: string }
+  | { type: 'DELETE_COURIER'; data: { courierId: string }; token?: string };
+
 
