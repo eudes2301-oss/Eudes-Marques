@@ -1,0 +1,10 @@
+{
+  "name": "Remix Logística de Entregas iFood",
+  "description": "Plataforma full-stack de gestão de entregas em tempo real, integração iFood, rastreamento GPS de entregadores e painel de despacho.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

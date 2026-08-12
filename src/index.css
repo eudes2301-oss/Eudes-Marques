@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+.bg-ifood-red {
+  background-color: #EA1D2C;
+}
+
+.text-ifood-red {
+  color: #EA1D2C;
+}
+
+.border-ifood-red {
+  border-color: #EA1D2C;
+}
+
+.hover\:bg-ifood-red-dark:hover {
+  background-color: #C21320;
+}
+
+/* Custom Leaflet Marker Styling override */
+.custom-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
+}
